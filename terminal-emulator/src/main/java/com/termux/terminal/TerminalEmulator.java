@@ -538,6 +538,10 @@ public final class TerminalEmulator {
         return mScreen == mAltBuffer;
     }
 
+    public boolean isLineBlank(int row) {
+        return mScreen.isLineBlank(row);
+    }
+
     private int getTerminalTranscriptRows(Integer transcriptRows) {
         if (transcriptRows == null || transcriptRows < TERMINAL_TRANSCRIPT_ROWS_MIN || transcriptRows > TERMINAL_TRANSCRIPT_ROWS_MAX)
             return DEFAULT_TERMINAL_TRANSCRIPT_ROWS;

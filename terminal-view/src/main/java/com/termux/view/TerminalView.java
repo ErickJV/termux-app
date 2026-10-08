@@ -771,9 +771,6 @@ public final class TerminalView extends View {
         if (TERMINAL_VIEW_KEY_LOGGING_ENABLED)
             mClient.logInfo(LOG_TAG, "onKeyDown(keyCode=" + keyCode + ", isSystem()=" + event.isSystem() + ", event=" + event + ")");
         if (mEmulator == null) return true;
-        if (isSelectingText()) {
-            stopTextSelectionMode();
-        }
 
         if (mClient.onKeyDown(keyCode, event, mTermSession)) {
             invalidate();
@@ -789,10 +786,47 @@ public final class TerminalView extends View {
 
         final int metaState = event.getMetaState();
         final boolean controlDown = event.isCtrlPressed() || mClient.readControlKey();
+        final boolean altDown = (metaState & (KeyEvent.META_ALT_LEFT_ON | KeyEvent.META_ALT_RIGHT_ON | KeyEvent.META_ALT_ON)) != 0 || event.isAltPressed() || mClient.readAltKey();
         final boolean leftAltDown = (metaState & KeyEvent.META_ALT_LEFT_ON) != 0 || mClient.readAltKey();
         final boolean shiftDown = event.isShiftPressed() || mClient.readShiftKey();
         final boolean rightAltDownFromEvent = (metaState & KeyEvent.META_ALT_RIGHT_ON) != 0;
 
+        if (controlDown && !altDown) {
+            if (keyCode == KeyEvent.KEYCODE_C) {
+                if (isSelectingText()) {
+                    String text = getSelectedText();
+                    if (text != null && !text.isEmpty()) {
+                        mTermSession.onCopyTextToClipboard(text);
+                    }
+                    stopTextSelectionMode();
+                    return true;
+                } else if (shiftDown) {
+                    return true;
+                }
+            } else if (keyCode == KeyEvent.KEYCODE_V) {
+                if (isSelectingText()) {
+                    stopTextSelectionMode();
+                }
+                mTermSession.onPasteTextFromClipboard();
+                return true;
+            } else if (keyCode == KeyEvent.KEYCODE_A) {
+                if (shiftDown) {
+                    if (isSelectingText()) {
+                        stopTextSelectionMode();
+                    }
+                    mTermSession.writeCodePoint(false, 1);
+                    return true;
+                } else {
+                    selectSmart();
+                    return true;
+                }
+            }
+        }
+
+        if (isSelectingText() && !KeyEvent.isModifierKey(keyCode)) {
+            stopTextSelectionMode();
+            if (keyCode == KeyEvent.KEYCODE_ESCAPE) return true;
+        }
         int keyMod = 0;
         if (controlDown) keyMod |= KeyHandler.KEYMOD_CTRL;
         if (event.isAltPressed() || leftAltDown) keyMod |= KeyHandler.KEYMOD_ALT;
@@ -860,6 +894,42 @@ public final class TerminalView extends View {
         final boolean altDown = leftAltDownFromEvent || mClient.readAltKey();
 
         if (mClient.onCodePoint(codePoint, controlDown, mTermSession)) return;
+
+        if (controlDown && !altDown) {
+            if (codePoint == 'c' || codePoint == 'C') {
+                if (isSelectingText()) {
+                    String text = getSelectedText();
+                    if (text != null && !text.isEmpty()) {
+                        mTermSession.onCopyTextToClipboard(text);
+                    }
+                    stopTextSelectionMode();
+                    return;
+                } else if (mClient.readShiftKey()) {
+                    return;
+                }
+            } else if (codePoint == 'v' || codePoint == 'V') {
+                if (isSelectingText()) {
+                    stopTextSelectionMode();
+                }
+                mTermSession.onPasteTextFromClipboard();
+                return;
+            } else if (codePoint == 'a' || codePoint == 'A') {
+                if (mClient.readShiftKey()) {
+                    if (isSelectingText()) {
+                        stopTextSelectionMode();
+                    }
+                    mTermSession.writeCodePoint(false, 1);
+                    return;
+                } else {
+                    selectSmart();
+                    return;
+                }
+            }
+        }
+
+        if (isSelectingText()) {
+            stopTextSelectionMode();
+        }
 
         if (controlDown) {
             if (codePoint >= 'a' && codePoint <= 'z') {
@@ -1424,6 +1494,15 @@ public final class TerminalView extends View {
         } else {
             return null;
         }
+    }
+
+    public void selectSmart() {
+        if (mEmulator == null || !requestFocus()) return;
+
+        getTextSelectionCursorController().selectSmart();
+        mClient.copyModeChanged(isSelectingText());
+
+        invalidate();
     }
 
     public void startTextSelectionMode(MotionEvent event) {

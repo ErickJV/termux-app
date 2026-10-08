@@ -33,6 +33,7 @@ public class TextSelectionCursorController implements CursorController {
     public final int ACTION_COPY = 1;
     public final int ACTION_PASTE = 2;
     public final int ACTION_MORE = 3;
+    public final int ACTION_SELECT_ALL = 4;
 
     public TextSelectionCursorController(TerminalView terminalView) {
         this.terminalView = terminalView;
@@ -49,6 +50,62 @@ public class TextSelectionCursorController implements CursorController {
         mEndHandle.positionAtCursor(mSelX2 + 1, mSelY2, true);
 
         setActionModeCallBacks();
+        mShowStartTime = System.currentTimeMillis();
+        mIsSelectingText = true;
+    }
+
+    public void selectSmart() {
+        if (terminalView.mEmulator == null) return;
+        TerminalBuffer screen = terminalView.mEmulator.getScreen();
+        if (screen == null) return;
+
+        int cursorRow = terminalView.mEmulator.getCursorRow();
+        int columns = terminalView.mEmulator.mColumns;
+        int screenRows = terminalView.mEmulator.mRows;
+        int activeTranscriptRows = screen.getActiveTranscriptRows();
+
+        int lastScreenRow = screenRows - 1;
+        while (lastScreenRow > 0 && screen.isLineBlank(lastScreenRow) && lastScreenRow > cursorRow) {
+            lastScreenRow--;
+        }
+
+        int blockStartY = cursorRow;
+        while (blockStartY > 0 && screen.getLineWrap(blockStartY - 1)) {
+            blockStartY--;
+        }
+        int blockEndY = cursorRow;
+        while (blockEndY < screenRows - 1 && screen.getLineWrap(blockEndY)) {
+            blockEndY++;
+        }
+
+        if (!mIsSelectingText) {
+            // Tier 1: Select current command/line block at the cursor
+            mSelX1 = 0;
+            mSelY1 = blockStartY;
+            mSelX2 = columns - 1;
+            mSelY2 = blockEndY;
+        } else if (mSelY1 <= 0 && mSelY2 >= lastScreenRow && mSelX1 == 0 && mSelX2 == columns - 1) {
+            // Tier 3: Already selecting screen buffer, expand to full scrollback transcript
+            mSelX1 = 0;
+            mSelY1 = -activeTranscriptRows;
+            mSelX2 = columns - 1;
+            mSelY2 = lastScreenRow;
+        } else {
+            // Tier 2: Expand to visible screen buffer
+            mSelX1 = 0;
+            mSelY1 = 0;
+            mSelX2 = columns - 1;
+            mSelY2 = lastScreenRow;
+        }
+
+        mStartHandle.positionAtCursor(mSelX1, mSelY1, true);
+        mEndHandle.positionAtCursor(mSelX2 + 1, mSelY2, true);
+
+        if (mActionMode == null) {
+            setActionModeCallBacks();
+        } else {
+            mActionMode.invalidate();
+        }
         mShowStartTime = System.currentTimeMillis();
         mIsSelectingText = true;
     }
@@ -70,6 +127,7 @@ public class TextSelectionCursorController implements CursorController {
         if (mActionMode != null) {
             // This will hide the TextSelectionCursorController
             mActionMode.finish();
+            mActionMode = null;
         }
 
         mSelX1 = mSelY1 = mSelX2 = mSelY2 = -1;
@@ -116,6 +174,7 @@ public class TextSelectionCursorController implements CursorController {
                 ClipboardManager clipboard = (ClipboardManager) terminalView.getContext().getSystemService(Context.CLIPBOARD_SERVICE);
                 menu.add(Menu.NONE, ACTION_COPY, Menu.NONE, R.string.copy_text).setShowAsAction(show);
                 menu.add(Menu.NONE, ACTION_PASTE, Menu.NONE, R.string.paste_text).setEnabled(clipboard != null && clipboard.hasPrimaryClip()).setShowAsAction(show);
+                menu.add(Menu.NONE, ACTION_SELECT_ALL, Menu.NONE, android.R.string.selectAll).setShowAsAction(show);
                 menu.add(Menu.NONE, ACTION_MORE, Menu.NONE, R.string.text_selection_more);
                 return true;
             }
@@ -142,6 +201,9 @@ public class TextSelectionCursorController implements CursorController {
                         terminalView.stopTextSelectionMode();
                         terminalView.mTermSession.onPasteTextFromClipboard();
                         break;
+                    case ACTION_SELECT_ALL:
+                        selectSmart();
+                        break;
                     case ACTION_MORE:
                         // We first store the selected text in case TerminalViewClient needs the
                         // selected text before MORE button was pressed since we are going to
@@ -159,6 +221,7 @@ public class TextSelectionCursorController implements CursorController {
 
             @Override
             public void onDestroyActionMode(ActionMode mode) {
+                mActionMode = null;
             }
 
         };
@@ -187,7 +250,7 @@ public class TextSelectionCursorController implements CursorController {
 
             @Override
             public void onDestroyActionMode(ActionMode mode) {
-                // Ignore.
+                mActionMode = null;
             }
 
             @Override

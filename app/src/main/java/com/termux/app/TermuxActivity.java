@@ -371,7 +371,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (mTerminalView != null && mTerminalView.hasFocus()) {
             int keyCode = event.getKeyCode();
-            if (keyCode == KeyEvent.KEYCODE_TAB || keyCode == KeyEvent.KEYCODE_ESCAPE) {
+            if (keyCode == KeyEvent.KEYCODE_TAB || keyCode == KeyEvent.KEYCODE_ESCAPE ||
+                (event.isCtrlPressed() && (keyCode == KeyEvent.KEYCODE_C || keyCode == KeyEvent.KEYCODE_V || keyCode == KeyEvent.KEYCODE_A))) {
                 if (event.getAction() == KeyEvent.ACTION_DOWN) {
                     return mTerminalView.onKeyDown(keyCode, event);
                 } else if (event.getAction() == KeyEvent.ACTION_UP) {

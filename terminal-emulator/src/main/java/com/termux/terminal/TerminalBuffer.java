@@ -257,6 +257,12 @@ public final class TerminalBuffer {
         mLines[externalToInternalRow(row)].mLineWrap = false;
     }
 
+    public boolean isLineBlank(int row) {
+        if (row < -mActiveTranscriptRows || row >= mScreenRows) return true;
+        TerminalRow line = mLines[externalToInternalRow(row)];
+        return line == null || line.isBlank();
+    }
+
     /**
      * Resize the screen which this transcript backs. Currently, this only works if the number of columns does not
      * change or the rows expand (that is, it only works when shrinking the number of rows).
