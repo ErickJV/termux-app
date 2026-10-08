@@ -15,6 +15,7 @@ import android.os.IBinder;
 import android.view.ContextMenu;
 import android.view.ContextMenu.ContextMenuInfo;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -307,6 +308,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         Logger.logVerbose(LOG_TAG, "onResume");
 
+        SamsungDexUtils.dexMetaKeyCapture(this, true);
+
         if (mIsInvalidState) return;
 
         if (mTermuxTerminalSessionActivityClient != null)
@@ -323,10 +326,21 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     @Override
+    protected void onPause() {
+        super.onPause();
+
+        Logger.logVerbose(LOG_TAG, "onPause");
+
+        SamsungDexUtils.dexMetaKeyCapture(this, false);
+    }
+
+    @Override
     protected void onStop() {
         super.onStop();
 
         Logger.logDebug(LOG_TAG, "onStop");
+
+        SamsungDexUtils.dexMetaKeyCapture(this, false);
 
         if (mIsInvalidState) return;
 
@@ -342,6 +356,30 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         unregisterTermuxActivityBroadcastReceiver();
         getDrawer().closeDrawers();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+
+        Logger.logVerbose(LOG_TAG, "onWindowFocusChanged: " + hasFocus);
+
+        SamsungDexUtils.dexMetaKeyCapture(this, hasFocus);
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (mTerminalView != null && mTerminalView.hasFocus()) {
+            int keyCode = event.getKeyCode();
+            if (keyCode == KeyEvent.KEYCODE_TAB || keyCode == KeyEvent.KEYCODE_ESCAPE) {
+                if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                    return mTerminalView.onKeyDown(keyCode, event);
+                } else if (event.getAction() == KeyEvent.ACTION_UP) {
+                    return mTerminalView.onKeyUp(keyCode, event);
+                }
+            }
+        }
+        return super.dispatchKeyEvent(event);
     }
 
     @Override
